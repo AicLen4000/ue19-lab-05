@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-scan-and-push:
@@ -18,17 +17,12 @@ jobs:
       security-events: write
 
     steps:
+      - name: Normalize image name to lowercase
+        id: norm
+        run: echo "image=${{ github.repository }}" | tr '[:upper:]' '[:lower:]' >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-
 
       - name: Build Docker image locally for scanning
         uses: docker/build-push-action@v6
@@ -36,13 +30,12 @@ jobs:
           context: .
           load: true
           push: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ steps.norm.outputs.image }}:latest
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          image-ref: ${{ env.REGISTRY }}/${{ steps.norm.outputs.image }}:latest
           format: table
           exit-code: '0'
           ignore-unfixed: true
@@ -60,5 +53,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ steps.norm.outputs.image }}:latest
